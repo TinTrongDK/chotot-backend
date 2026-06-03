@@ -2,10 +2,17 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { GlobalExceptionFilter } from './filters/global-exception.filter'; // 👈 1. Import bộ lọc lỗi toàn cục vừa tạo
+import { GlobalExceptionFilter } from './filters/global-exception.filter'; // 👈 1. Import bộ lọc lỗi toàn cục
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // 🌐 CẤU HÌNH QUAN TRỌNG: Mở cổng CORS cho phép Frontend kết nối mượt mà
+  app.enableCors({
+    origin: '*', // Cho phép mọi domain gọi API (Sau này đi làm thực tế sẽ điền link frontend cụ thể vào đây)
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
 
   // 1. Cấu hình kiểm duyệt dữ liệu đầu vào (DTO)
   app.useGlobalPipes(
@@ -20,8 +27,8 @@ async function bootstrap() {
 
   // 3. Cấu hình tài liệu API Swagger (Cập nhật tên chuyên nghiệp cho đồ án thương mại điện tử)
   const config = new DocumentBuilder()
-    .setTitle('API Hệ Thống Thương Mại Điện Tử') // 👈 Đổi tên tiêu đề lớn
-    .setDescription('Tài liệu tích hợp Backend cho nền tảng mua bán trực tuyến') // 👈 Đổi mô tả hệ thống
+    .setTitle('API Hệ Thống Thương Mại Điện Tử')
+    .setDescription('Tài liệu tích hợp Backend cho nền tảng mua bán trực tuyến')
     .setVersion('1.0')
     .addBearerAuth() // Kích hoạt nút xác thực JWT (ổ khóa) trên giao diện
     .build();
