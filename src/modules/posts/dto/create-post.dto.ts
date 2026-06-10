@@ -5,7 +5,7 @@ import {
   IsString,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer'; // 👈 1. Import thêm Type ở đây
+import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreatePostDto {
@@ -27,11 +27,12 @@ export class CreatePostDto {
 
   @ApiProperty({
     type: 'string',
-    format: 'binary',
-    description: 'Hình ảnh đại diện sản phẩm',
+    description: 'Hình ảnh đại diện sản phẩm (URL ảnh)',
     required: false,
+    example: 'https://cdn.tgdd.vn/image.jpg',
   })
   @IsOptional()
+  @IsString({ message: 'Thumbnail phải là một chuỗi đường dẫn ảnh' }) // 👈 Bổ sung cái này là 'cửa ngõ' đón link text
   thumbnail?: string;
 
   @ApiProperty({
@@ -39,7 +40,7 @@ export class CreatePostDto {
     example: 21500000,
     minimum: 0,
   })
-  @Type(() => Number) // 👈 2. Ép kiểu String từ form-data thành Number
+  @Type(() => Number)
   @IsNumber({}, { message: 'Giá bán phải là định dạng số' })
   @Min(0, { message: 'Giá bán không được nhỏ hơn 0' })
   price!: number;
@@ -48,7 +49,7 @@ export class CreatePostDto {
     description: 'Mã ID của danh mục sản phẩm',
     example: 1,
   })
-  @Type(() => Number) // 👈 3. Ép kiểu String từ form-data thành Number
+  @Type(() => Number)
   @IsNumber({}, { message: 'ID Danh mục phải là định dạng số' })
   @IsNotEmpty({ message: 'Danh mục không được để trống' })
   categoryId!: number;
