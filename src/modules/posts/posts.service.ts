@@ -4,43 +4,57 @@ import { UpdatePostDto } from './dto/update-post.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 import sanitizeHtml from 'sanitize-html';
 
+// 🌟 1. Nhập thêm enum Status từ Prisma Client
+import { Status } from '@prisma/client';
+
+// Khóa chặt kiểu dữ liệu bằng 'as const' để TypeScript không bắt bẻ lỗi 'boolean'
+const SANITIZE_OPTIONS = {
+  allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img']),
+  allowedAttributes: false as const,
+};
+
 @Injectable()
 export class PostsService {
   constructor(private readonly prismaService: PrismaService) {}
 
-  // 1. Tạo bài đăng (Đã tích hợp Diệt XSS và Ép kiểu Form-data)
+  // ====================================================================
+  // 1. TẠO BÀI ĐĂNG (Mặc định Prisma tự gán status = PENDING)
+  // ====================================================================
   async create(
     userId: number,
     createPostDto: CreatePostDto,
     thumbnailUrl: string | null,
   ) {
-    // Rửa sạch mã độc từ Editor
-    const cleanContent = sanitizeHtml(createPostDto.content, {
-      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img']),
-      allowedAttributes: false,
-    });
+    const cleanContent = sanitizeHtml(createPostDto.content, SANITIZE_OPTIONS);
 
     return await this.prismaService.post.create({
       data: {
         title: createPostDto.title,
         content: cleanContent,
-        thumbnail: thumbnailUrl, // Lấy từ Controller truyền sang
-        price: parseFloat(createPostDto.price as any), // Ép kiểu vì form-data gửi lên là String
-        categoryId: parseInt(createPostDto.categoryId as any, 10),
+        thumbnail: thumbnailUrl,
+        price: createPostDto.price,
+        categoryId: createPostDto.categoryId,
         userId: userId,
       },
     });
   }
 
-  // 2. 🟢 Lấy danh sách (Đã fix lỗi ép kiểu Page/Limit để phân trang chuẩn)
-  async findAll(query: { page?: any; limit?: any; keyword?: string }) {
-    // Nếu Frontend không gửi lên, mặc định là trang 1, mỗi trang 10 bài
+  // ====================================================================
+  // 2. LẤY DANH SÁCH CÓ PHÂN TRANG, TÌM KIẾM & LỌC TRẠNG THÁI
+  // ====================================================================
+  // 🌟 2. Thêm 'status?: Status' vào tham số
+  async findAll(query: {
+    page?: string;
+    limit?: string;
+    keyword?: string;
+    status?: Status;
+  }) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const keyword = query.keyword || '';
     const skip = (page - 1) * limit;
 
-    const whereCondition = keyword
+    const whereCondition: any = keyword
       ? {
           OR: [
             { title: { contains: keyword } },
@@ -48,6 +62,15 @@ export class PostsService {
           ],
         }
       : {};
+
+    // 🌟 3. LOGIC CHỜ DUYỆT:
+    // Nếu Admin truyền status vào (VD: gọi API lấy bài PENDING), lấy đúng bài đó.
+    // Nếu không truyền (User bình thường vào trang chủ), MẶC ĐỊNH chỉ lấy bài ACTIVE.
+    if (query.status) {
+      whereCondition.status = query.status;
+    } else {
+      whereCondition.status = Status.ACTIVE;
+    }
 
     const posts = await this.prismaService.post.findMany({
       where: whereCondition,
@@ -75,7 +98,9 @@ export class PostsService {
     };
   }
 
-  // 3. Xem chi tiết
+  // ====================================================================
+  // 3. XEM CHI TIẾT
+  // ====================================================================
   async findOne(id: number) {
     const post = await this.prismaService.post.findUnique({
       where: { id },
@@ -84,30 +109,29 @@ export class PostsService {
         user: { select: { name: true, email: true } },
       },
     });
-    if (!post)
+
+    if (!post) {
       throw new NotFoundException(`Không tìm thấy bài đăng có ID ${id}`);
+    }
+
     return post;
   }
 
-  // 4. Cập nhật (Cũng cần diệt XSS nếu người dùng sửa nội dung)
+  // ====================================================================
+  // 4. CẬP NHẬT
+  // ====================================================================
   async update(id: number, updatePostDto: UpdatePostDto) {
     await this.findOne(id); // Check xem bài viết có tồn tại không
 
-    // Xử lý dữ liệu sạch trước khi update
-    const dataToUpdate: any = { ...updatePostDto };
+    const dataToUpdate = { ...updatePostDto };
 
-    if (updatePostDto.content) {
-      dataToUpdate.content = sanitizeHtml(updatePostDto.content, {
-        allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img']),
-        allowedAttributes: false,
-      });
+    // Chỉ làm sạch XSS nếu người dùng có gửi nội dung mới
+    if (dataToUpdate.content) {
+      dataToUpdate.content = sanitizeHtml(
+        dataToUpdate.content,
+        SANITIZE_OPTIONS,
+      );
     }
-
-    // Nếu có sửa giá hoặc danh mục, nhớ ép kiểu
-    if (updatePostDto.price)
-      dataToUpdate.price = parseFloat(updatePostDto.price as any);
-    if (updatePostDto.categoryId)
-      dataToUpdate.categoryId = parseInt(updatePostDto.categoryId as any, 10);
 
     return await this.prismaService.post.update({
       where: { id },
@@ -115,9 +139,24 @@ export class PostsService {
     });
   }
 
-  // 5. Xóa
+  // ====================================================================
+  // 5. XÓA
+  // ====================================================================
   async remove(id: number) {
     await this.findOne(id);
     return await this.prismaService.post.delete({ where: { id } });
+  }
+
+  // ====================================================================
+  // 6. ADMIN CẬP NHẬT TRẠNG THÁI (DUYỆT BÀI / ĐÃ BÁN)
+  // ====================================================================
+  // 🌟 4. Thêm hàm mới này cho Admin
+  async updateStatus(id: number, status: Status) {
+    await this.findOne(id); // Kiểm tra xem bài đăng có tồn tại không
+
+    return await this.prismaService.post.update({
+      where: { id },
+      data: { status: status },
+    });
   }
 }

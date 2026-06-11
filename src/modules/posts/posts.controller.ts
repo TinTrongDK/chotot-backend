@@ -12,6 +12,7 @@ import {
   Query,
   UseInterceptors,
   UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -29,6 +30,9 @@ import {
   ApiConsumes,
   ApiQuery,
 } from '@nestjs/swagger';
+
+// 🌟 1. Nhập thêm enum Status từ Prisma Client
+import { Status } from '@prisma/client';
 
 const multerStorageConfig = diskStorage({
   destination: './uploads',
@@ -71,29 +75,21 @@ export class PostsController {
   ) {
     const userId = req.user.id;
 
-    // 🔍 DEBUG — xem backend nhận được gì (xóa sau khi fix xong)
-    console.log('=== DEBUG CREATE POST ===');
-    console.log('Body DTO nhận được:', createPostDto);
-    console.log('File upload:', file ? file.filename : 'Không có file');
-    console.log('thumbnail từ DTO:', createPostDto.thumbnail);
-
     // Ưu tiên: file upload > link URL text > null
     const thumbnailUrl = file
       ? `/uploads/${file.filename}`
       : createPostDto.thumbnail || null;
 
-    console.log('thumbnailUrl sẽ lưu vào DB:', thumbnailUrl);
-    console.log('=========================');
-
     return this.postsService.create(userId, createPostDto, thumbnailUrl);
   }
 
   // ====================================================================
-  // 🟢 2. LẤY DANH SÁCH BÀI ĐĂNG (Công khai)
+  // 🟢 2. LẤY DANH SÁCH BÀI ĐĂNG (Hỗ trợ lọc theo trạng thái)
   // ====================================================================
   @Get()
   @ApiOperation({
-    summary: 'Lấy danh sách bài viết (Có phân trang & tìm kiếm)',
+    summary:
+      'Lấy danh sách bài viết (Có phân trang, tìm kiếm & lọc trạng thái)',
   })
   @ApiQuery({
     name: 'page',
@@ -113,12 +109,19 @@ export class PostsController {
     type: String,
     description: 'Từ khóa tìm kiếm tiêu đề',
   })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: Status,
+    description: 'Lọc theo trạng thái (PENDING, ACTIVE, SOLD)',
+  })
   findAll(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('keyword') keyword?: string,
+    @Query('status') status?: Status, // 🌟 Bắt thêm query status từ URL
   ) {
-    return this.postsService.findAll({ page, limit, keyword });
+    return this.postsService.findAll({ page, limit, keyword, status });
   }
 
   // ====================================================================
@@ -170,5 +173,29 @@ export class PostsController {
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.postsService.remove(id);
+  }
+
+  // ====================================================================
+  // 🔴 6. DUYỆT BÀI ĐĂNG (Dành cho Admin)
+  // ====================================================================
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Admin duyệt bài (Cập nhật status: PENDING -> ACTIVE / SOLD)',
+  })
+  @Patch(':id/status')
+  updateStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('status') status: Status,
+  ) {
+    // 🌟 Kiểm tra nghiêm ngặt: Nếu truyền trạng thái không có trong Enum thì báo lỗi ngay
+    const validStatuses = Object.values(Status);
+    if (!validStatuses.includes(status)) {
+      throw new BadRequestException(
+        `Trạng thái không hợp lệ. Chỉ chấp nhận: ${validStatuses.join(', ')}`,
+      );
+    }
+
+    return this.postsService.updateStatus(id, status);
   }
 }
