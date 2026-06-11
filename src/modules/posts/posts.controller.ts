@@ -84,12 +84,12 @@ export class PostsController {
   }
 
   // ====================================================================
-  // 🟢 2. LẤY DANH SÁCH BÀI ĐĂNG (Hỗ trợ lọc theo trạng thái)
+  // 🟢 2. LẤY DANH SÁCH BÀI ĐĂNG (Hỗ trợ lọc theo trạng thái & danh mục)
   // ====================================================================
   @Get()
   @ApiOperation({
     summary:
-      'Lấy danh sách bài viết (Có phân trang, tìm kiếm & lọc trạng thái)',
+      'Lấy danh sách bài viết (Có phân trang, tìm kiếm, lọc trạng thái & danh mục)',
   })
   @ApiQuery({
     name: 'page',
@@ -115,13 +115,28 @@ export class PostsController {
     enum: Status,
     description: 'Lọc theo trạng thái (PENDING, ACTIVE, SOLD)',
   })
+  // 🌟 THÊM: Swagger cho categoryId
+  @ApiQuery({
+    name: 'categoryId',
+    required: false,
+    type: String,
+    description: 'Lọc theo ID danh mục',
+  })
   findAll(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('keyword') keyword?: string,
-    @Query('status') status?: Status, // 🌟 Bắt thêm query status từ URL
+    @Query('status') status?: Status,
+    @Query('categoryId') categoryId?: string, // 🌟 THÊM: Bắt biến categoryId từ Frontend gửi lên
   ) {
-    return this.postsService.findAll({ page, limit, keyword, status });
+    // 🌟 THÊM: Truyền categoryId sang service để xử lý
+    return this.postsService.findAll({
+      page,
+      limit,
+      keyword,
+      status,
+      categoryId,
+    });
   }
 
   // ====================================================================
@@ -188,7 +203,6 @@ export class PostsController {
     @Param('id', ParseIntPipe) id: number,
     @Body('status') status: Status,
   ) {
-    // 🌟 Kiểm tra nghiêm ngặt: Nếu truyền trạng thái không có trong Enum thì báo lỗi ngay
     const validStatuses = Object.values(Status);
     if (!validStatuses.includes(status)) {
       throw new BadRequestException(

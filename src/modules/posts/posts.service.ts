@@ -40,30 +40,38 @@ export class PostsService {
   }
 
   // ====================================================================
-  // 2. LẤY DANH SÁCH CÓ PHÂN TRANG, TÌM KIẾM & LỌC TRẠNG THÁI
+  // 2. LẤY DANH SÁCH CÓ PHÂN TRANG, TÌM KIẾM, LỌC TRẠNG THÁI & DANH MỤC
   // ====================================================================
-  // 🌟 2. Thêm 'status?: Status' vào tham số
+  // 🌟 Thêm categoryId vào tham số nhận vào
   async findAll(query: {
     page?: string;
     limit?: string;
     keyword?: string;
     status?: Status;
+    categoryId?: string;
   }) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
     const keyword = query.keyword || '';
     const skip = (page - 1) * limit;
 
-    const whereCondition: any = keyword
-      ? {
-          OR: [
-            { title: { contains: keyword } },
-            { content: { contains: keyword } },
-          ],
-        }
-      : {};
+    // Khởi tạo object rỗng trước để dễ dàng nhét thêm điều kiện
+    const whereCondition: any = {};
 
-    // 🌟 3. LOGIC CHỜ DUYỆT:
+    // 🌟 Lọc theo từ khóa tìm kiếm (nếu có)
+    if (keyword) {
+      whereCondition.OR = [
+        { title: { contains: keyword } },
+        { content: { contains: keyword } },
+      ];
+    }
+
+    // 🌟 LỌC THEO DANH MỤC: Bắt chính xác ID danh mục được truyền lên
+    if (query.categoryId) {
+      whereCondition.categoryId = Number(query.categoryId);
+    }
+
+    // 🌟 LOGIC CHỜ DUYỆT:
     // Nếu Admin truyền status vào (VD: gọi API lấy bài PENDING), lấy đúng bài đó.
     // Nếu không truyền (User bình thường vào trang chủ), MẶC ĐỊNH chỉ lấy bài ACTIVE.
     if (query.status) {
@@ -150,7 +158,6 @@ export class PostsService {
   // ====================================================================
   // 6. ADMIN CẬP NHẬT TRẠNG THÁI (DUYỆT BÀI / ĐÃ BÁN)
   // ====================================================================
-  // 🌟 4. Thêm hàm mới này cho Admin
   async updateStatus(id: number, status: Status) {
     await this.findOne(id); // Kiểm tra xem bài đăng có tồn tại không
 
