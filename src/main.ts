@@ -25,10 +25,12 @@ async function bootstrap() {
   // 2. Kích hoạt phễu hứng lỗi toàn cục & hệ thống ghi log (PROD-003 & PROD-004)
   app.useGlobalFilters(new GlobalExceptionFilter());
 
-  // 3. Cấu hình tài liệu API Swagger (Cập nhật tên chuyên nghiệp cho đồ án thương mại điện tử)
+  // 3. Cấu hình tài liệu API Swagger (Cập nhật tên hệ thống TT Market)
   const config = new DocumentBuilder()
-    .setTitle('API Hệ Thống Thương Mại Điện Tử')
-    .setDescription('Tài liệu tích hợp Backend cho nền tảng mua bán trực tuyến')
+    .setTitle('API Hệ Thống TT Market')
+    .setDescription(
+      'Tài liệu tích hợp Backend cho nền tảng mua bán trực tuyến TT Market',
+    )
     .setVersion('1.0')
     .addBearerAuth() // Kích hoạt nút xác thực JWT (ổ khóa) trên giao diện
     .build();
