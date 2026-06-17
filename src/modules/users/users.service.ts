@@ -77,9 +77,15 @@ export class UsersService {
   }
 
   async remove(id: number): Promise<User> {
-    // 👈 Tương tự, kiểm tra tồn tại trước khi xóa
+    // 1. Kiểm tra xem User có tồn tại không trước khi xóa
     await this.findOne(id);
 
+    // 🌟 2. THÊM BƯỚC NÀY: Xóa sạch toàn bộ bài đăng của User này trước để gỡ lỗi khóa ngoại
+    await this.prismaService.post.deleteMany({
+      where: { userId: id },
+    });
+
+    // 3. Bây giờ thì có thể xóa User một cách an toàn mà không bị MySQL chửi nữa
     return await this.prismaService.user.delete({
       where: { id: id },
     });
